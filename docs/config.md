@@ -908,6 +908,8 @@ Per-output configuration. Each [[outputs]] entry matches by connector name. Find
 
 `mode` accepts "preferred", "WxH", or "WxH@Hz". A bare "WxH" only selects a mode the monitor already advertises — if none matches, it keeps the preferred mode (logged as a warning, not an error). "WxH@Hz" forces that exact mode, synthesizing a CVT modeline when the monitor doesn't advertise it (intended for CRTs or forcing non-standard modes; may be rejected by some panels).
 
+`vrr` controls variable refresh rate (adaptive sync / FreeSync / G-Sync Compatible): "off" (default), "always", or "fullscreen" — VRR only while a fullscreen window owns the output, i.e. smooth in games without desktop flicker risk on VA panels. Needs an atomic KMS driver and a display that advertises VRR (`vrr_capable 1` in `modetest`; if it reads 0, the usual cause is a FreeSync toggle turned off in the monitor's OSD). Hot-reloadable. HDMI connectors that require a modeset to toggle VRR are not supported yet.
+
 **Example:**
 
 ```toml
@@ -917,6 +919,7 @@ scale = 1.5              # fractional scale (default: 1.0)
 transform = "normal"     # normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270
 position = "auto"        # "auto" (left-to-right) or [x, y] in layout coords
 mode = "preferred"       # "preferred", "1920x1080", or "2560x1440@144"
+vrr = "off"              # "off" (default), "always", or "fullscreen"
 
 [[outputs]]
 name = "HDMI-A-1"

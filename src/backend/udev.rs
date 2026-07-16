@@ -12,7 +12,7 @@ use smithay::{
             gbm::{GbmAllocator, GbmBufferFlags, GbmDevice},
         },
         drm::{
-            DrmDevice, DrmDeviceFd, DrmEvent, DrmNode, NodeType,
+            DrmDevice, DrmDeviceFd, DrmEvent, DrmNode, NodeType, VrrSupport,
             compositor::{DrmCompositor, FrameError, FrameFlags, PrimaryPlaneElement},
             exporter::gbm::GbmFramebufferExporter,
         },
@@ -43,7 +43,7 @@ use crate::backend::cvt;
 use crate::backend::gamma::{GammaProps, set_gamma_for_crtc_legacy};
 use crate::render::OutputRenderElements;
 use crate::state::{DriftWm, init_output_state};
-use driftwm::config::{OutputMode as ConfigOutputMode, OutputPosition};
+use driftwm::config::{OutputMode as ConfigOutputMode, OutputPosition, VrrMode};
 use smithay::wayland::seat::WaylandFocus;
 
 const SUPPORTED_COLOR_FORMATS: &[Fourcc] = &[
@@ -84,6 +84,11 @@ struct SurfaceData {
     /// Re-applied on session resume. `Some(Some(ramp))` = set to ramp,
     /// `Some(None)` = reset to identity, `None` = nothing pending.
     pending_gamma_change: Option<Option<Vec<u16>>>,
+    /// VRR capability of this connector, probed once at surface creation.
+    vrr_support: VrrSupport,
+    /// Set after a failed VRR toggle so a misbehaving driver isn't retried
+    /// (and test-committed) every frame.
+    vrr_error_logged: bool,
 }
 
 /// Opaque handle to udev backend device data. Returned by init_udev,
@@ -306,7 +311,7 @@ pub(crate) fn render_if_needed(data: &mut DriftWm) {
             && !data.frames_pending.contains(&crtc)
             && !data.estimated_vblank_timers.contains_key(&crtc)
         {
-            render_frame(data, &mut surface.compositor, &surface.output, crtc);
+            render_frame(data, surface, crtc);
         }
     }
 }
@@ -647,7 +652,7 @@ pub fn init_udev(
                         data.loop_handle.remove(token);
                     }
                     if data.redraws_needed.contains(&surface.output) {
-                        render_frame(data, &mut surface.compositor, &surface.output, crtc);
+                        render_frame(data, surface, crtc);
                     }
                 }
                 DrmEvent::Error(err) => {
@@ -722,7 +727,7 @@ pub fn init_udev(
                                 );
                             }
                         }
-                        render_frame(data, &mut surface.compositor, &surface.output, crtc);
+                        render_frame(data, surface, crtc);
                     }
                 }
             }
@@ -803,12 +808,7 @@ pub fn init_udev(
                                             &mut data.foreign_toplevel_state,
                                             &surface.output,
                                         );
-                                        render_frame(
-                                            data,
-                                            &mut surface.compositor,
-                                            &surface.output,
-                                            crtc,
-                                        );
+                                        render_frame(data, surface, crtc);
                                     }
                                 }
                                 DrmScanEvent::Disconnected {
@@ -852,7 +852,7 @@ pub fn init_udev(
         let mut dev = device.borrow_mut();
         for (&crtc, surface) in dev.surfaces.iter_mut() {
             data.active_outputs.insert(surface.output.clone());
-            render_frame(data, &mut surface.compositor, &surface.output, crtc);
+            render_frame(data, surface, crtc);
         }
         // 13. Notify output management clients of initial state
         let head_state = collect_output_state_from_surfaces(&dev.surfaces, &dev.drm);
@@ -1033,6 +1033,7 @@ fn create_surface(
     );
 
     let output_cfg = state.config.output_config(&connector_name);
+    let vrr_mode = output_cfg.map(|c| c.vrr).unwrap_or_default();
 
     let config_mode = output_cfg
         .map(|c| &c.mode)
@@ -1250,6 +1251,34 @@ fn create_surface(
         );
     }
 
+    let vrr_support = match compositor.vrr_supported(connector.handle()) {
+        Ok(support) => support,
+        Err(e) => {
+            tracing::warn!(
+                "Output {connector_name}: VRR support query failed ({e}), treating as unsupported"
+            );
+            VrrSupport::NotSupported
+        }
+    };
+    match (vrr_mode, vrr_support) {
+        (VrrMode::Off, _) => {}
+        (_, VrrSupport::Supported) => {
+            tracing::info!("Output {connector_name}: VRR available (vrr = {vrr_mode:?})");
+        }
+        (_, VrrSupport::RequiresModeset) => {
+            tracing::warn!(
+                "Output {connector_name}: vrr configured but this connector needs a modeset to \
+                 toggle VRR (typical for HDMI) — not supported yet, staying at fixed refresh"
+            );
+        }
+        (_, VrrSupport::NotSupported) => {
+            tracing::warn!(
+                "Output {connector_name}: vrr configured but the display does not advertise VRR \
+                 (vrr_capable=0) — usually a FreeSync/Adaptive-Sync toggle in the monitor's OSD"
+            );
+        }
+    }
+
     Some(SurfaceData {
         compositor,
         output,
@@ -1260,6 +1289,8 @@ fn create_surface(
         global,
         gamma_props,
         pending_gamma_change: None,
+        vrr_support,
+        vrr_error_logged: false,
     })
 }
 
@@ -1395,14 +1426,51 @@ fn teardown_output(data: &mut DriftWm, surface: SurfaceData, is_last: bool) {
 }
 
 /// Render a single frame and queue it to the DRM compositor.
-fn render_frame(
-    data: &mut DriftWm,
-    compositor: &mut GbmDrmCompositor,
-    output: &Output,
-    crtc: crtc::Handle,
-) {
+fn render_frame(data: &mut DriftWm, surface: &mut SurfaceData, crtc: crtc::Handle) {
+    let SurfaceData {
+        compositor,
+        output,
+        vrr_support,
+        vrr_error_logged,
+        ..
+    } = surface;
+
     #[cfg(feature = "profile-with-tracy")]
     let _span = tracy_client::span!("udev::render_frame");
+
+    // Keep the CRTC's VRR state in sync with config and fullscreen state.
+    // The mode is read live from config so a hot-reload flips it without a
+    // compositor restart; the capability probe is from surface creation.
+    if matches!(vrr_support, VrrSupport::Supported) && !*vrr_error_logged {
+        let desired = match data
+            .config
+            .output_config(&output.name())
+            .map(|c| c.vrr)
+            .unwrap_or_default()
+        {
+            VrrMode::Off => false,
+            VrrMode::Always => true,
+            VrrMode::Fullscreen => data.fullscreen.contains_key(&*output),
+        };
+        if compositor.vrr_enabled() != desired {
+            match compositor.use_vrr(desired) {
+                Ok(()) => {
+                    tracing::info!(
+                        "Output {}: VRR {}",
+                        output.name(),
+                        if desired { "on" } else { "off" }
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Output {}: VRR toggle failed ({e}) — disabling VRR attempts until restart",
+                        output.name()
+                    );
+                    *vrr_error_logged = true;
+                }
+            }
+        }
+    }
 
     #[cfg(feature = "profile-with-tracy")]
     {

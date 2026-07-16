@@ -952,6 +952,20 @@ pub struct OutputConfig {
     pub transform: Option<Transform>,
     pub position: OutputPosition,
     pub mode: OutputMode,
+    pub vrr: VrrMode,
+}
+
+/// Per-output VRR (variable refresh rate / adaptive sync) policy.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VrrMode {
+    /// Fixed refresh rate (default).
+    #[default]
+    Off,
+    /// VRR whenever the display supports it.
+    Always,
+    /// VRR only while a fullscreen window owns the output — smooth in
+    /// games without risking desktop brightness flicker on VA panels.
+    Fullscreen,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

@@ -1235,6 +1235,46 @@ mod tests {
     }
 
     #[test]
+    fn parse_output_rule_vrr_modes() {
+        for (value, expected) in [
+            ("off", VrrMode::Off),
+            ("always", VrrMode::Always),
+            ("fullscreen", VrrMode::Fullscreen),
+        ] {
+            let toml_str = format!(
+                r#"
+                [[outputs]]
+                name = "DP-1"
+                vrr = "{value}"
+            "#
+            );
+            let config = Config::from_toml(&toml_str).unwrap();
+            assert_eq!(config.output_configs[0].vrr, expected, "vrr = {value}");
+        }
+    }
+
+    #[test]
+    fn parse_output_rule_vrr_defaults_off() {
+        let toml_str = r#"
+            [[outputs]]
+            name = "DP-1"
+        "#;
+        let config = Config::from_toml(toml_str).unwrap();
+        assert_eq!(config.output_configs[0].vrr, VrrMode::Off);
+    }
+
+    #[test]
+    fn parse_output_rule_vrr_invalid_drops_entry() {
+        let toml_str = r#"
+            [[outputs]]
+            name = "DP-1"
+            vrr = "adaptive"
+        "#;
+        let config = Config::from_toml(toml_str).unwrap();
+        assert!(config.output_configs.is_empty());
+    }
+
+    #[test]
     fn parse_output_rule_valid() {
         let toml_str = r#"
             [[outputs]]

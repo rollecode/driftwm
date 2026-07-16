@@ -317,3 +317,11 @@ let images = xcursor::parser::parse_xcursor(&std::fs::read(path)?)?;
 
 - **Temporaries in `if let` live until end of block** — separate `let x = expr.cloned(); if let Some(x) = x {` when needing `&mut self` inside the block.
 - **DMA-BUF blocker uses let-chains** — `if let Some(dmabuf) = ... && let Ok((blocker, source)) = ... && let Some(client) = ... { }` is idiomatic Rust 2024.
+
+### VRR (variable refresh rate)
+
+- **`DrmCompositor::vrr_supported(connector::Handle) -> FrameResult<VrrSupport, A, F>`** — probes `vrr_capable` on the connector + `VRR_ENABLED` on the CRTC. `VrrSupport::{NotSupported, RequiresModeset, Supported}`; HDMI reports `RequiresModeset` (kernel flicker workaround, see smithay atomic.rs), DP reports `Supported`. Legacy (non-atomic) surfaces are always `NotSupported`.
+- **`DrmCompositor::use_vrr(&mut self, bool) -> FrameResult<...>`** — idempotent (early-returns when pending state matches); internally does a test commit with a test buffer, so don't call it speculatively every frame — gate on `vrr_enabled() != desired`.
+- **`DrmCompositor::vrr_enabled(&self) -> bool`** — reads pending state, safe per frame.
+- **`VrrSupport` re-exported at `smithay::backend::drm::VrrSupport`**.
+- Cursor-position-only updates are already skipped for VRR by `DrmCompositor` (no forced max-rate refresh from cursor moves).

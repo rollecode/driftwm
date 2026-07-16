@@ -14,7 +14,7 @@ use super::toml::{
 use super::types::{
     BackendConfig, DecorationConfig, DecorationMode, EffectsConfig, FontWeight, KeyCombo, ModKey,
     OutputConfig, OutputMode, OutputOutlineSettings, OutputPosition, PassKeys, Pattern, TitleAlign,
-    WindowRule,
+    VrrMode, WindowRule,
 };
 
 /// How actionable a config warning is. The error bar has room for one message,
@@ -531,12 +531,23 @@ pub(super) fn parse_output_rule(r: OutputRuleFile) -> Result<OutputConfig, Strin
         .map(|s| parse_output_mode(&s))
         .transpose()?
         .unwrap_or_default();
+    let vrr = match r.vrr.as_deref() {
+        None | Some("off") => VrrMode::Off,
+        Some("always") => VrrMode::Always,
+        Some("fullscreen") => VrrMode::Fullscreen,
+        Some(other) => {
+            return Err(format!(
+                "vrr must be \"off\", \"always\" or \"fullscreen\", got \"{other}\""
+            ));
+        }
+    };
     Ok(OutputConfig {
         name: r.name,
         scale,
         transform,
         position,
         mode,
+        vrr,
     })
 }
 

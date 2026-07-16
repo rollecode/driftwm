@@ -306,6 +306,7 @@ pub(super) struct OutputRuleFile {
     pub transform: Option<String>,
     pub position: Option<::toml::Value>,
     pub mode: Option<String>,
+    pub vrr: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
