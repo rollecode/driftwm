@@ -86,8 +86,36 @@ impl DriftWm {
         let pointer = self.seat.get_pointer().unwrap();
 
         if self.pointer_constraint_active() {
-            pointer.set_location(new_pos);
-            return;
+            // The silent fast path is only valid while the constrained surface
+            // is still what's under the cursor at the new canvas position. A
+            // user-driven camera/zoom warp can slide a different surface under
+            // a screen-fixed cursor; keeping the constraint active then leaves
+            // every later input consulting a stale lock/confine (game surface
+            // keeps pointer focus while the user visibly points elsewhere).
+            // Deactivate and fall through to the normal deferred resync — the
+            // constraint reactivates via maybe_activate_pointer_constraint
+            // when the cursor returns to the constrained surface.
+            let same_surface_under_cursor = pointer.current_focus().is_some_and(|current| {
+                self.focus_under(new_pos)
+                    .is_some_and(|(under, _)| under == current)
+            });
+            if same_surface_under_cursor {
+                pointer.set_location(new_pos);
+                return;
+            }
+            if let Some(focus) = pointer.current_focus() {
+                smithay::wayland::pointer_constraints::with_pointer_constraint(
+                    &focus.0,
+                    &pointer,
+                    |c| {
+                        if let Some(c) = c
+                            && c.is_active()
+                        {
+                            c.deactivate();
+                        }
+                    },
+                );
+            }
         }
 
         if pointer.is_grabbed() {
