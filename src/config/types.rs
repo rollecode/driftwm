@@ -1070,6 +1070,13 @@ pub struct BackgroundConfig {
     /// the refresh rate, and between animation ticks the compositor reuses the
     /// composited result instead of re-evaluating the shader.
     pub animate_fps: u32,
+    /// Freeze animated (`u_time`) background shaders entirely: no animation
+    /// ticks are scheduled and the time uniform is never advanced on its own.
+    /// Camera pans and zooms still update the background normally (the time
+    /// uniform rides along and jumps to "now" on such pushes). Toggleable at
+    /// runtime via config hot-reload — e.g. pause the background while a game
+    /// or screenshare is running.
+    pub animate_paused: bool,
 }
 
 #[cfg(test)]

@@ -417,8 +417,9 @@ pub(crate) fn process_blur_requests(
     // once and only recomputed on camera/geometry change, so it freezes over an
     // animated wallpaper instead of re-sampling it every 1/fps (also avoids the
     // 1.0/fps division below).
-    let animated_bg =
-        state.render.background_is_animated && state.config.effects.animate_blur_fps > 0;
+    let animated_bg = state.render.background_is_animated
+        && !state.config.background.animate_paused
+        && state.config.effects.animate_blur_fps > 0;
     let mut shared_refreshed = false;
     if animated_bg {
         let min_interval =

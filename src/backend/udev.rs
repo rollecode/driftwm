@@ -175,6 +175,7 @@ pub(crate) fn render_if_needed(data: &mut DriftWm) {
         let fps = data.config.background.animate_fps;
         let eligible: Vec<String> = data.background_render_eligible_output_names().collect();
         if data.render.background_is_animated
+            && !data.config.background.animate_paused
             && fps > 0
             && !data.render.background_tick_armed
             && !eligible.is_empty()

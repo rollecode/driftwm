@@ -597,6 +597,12 @@ Default: `0`
 
 Frame-rate cap for animated (`u_time`) shader backgrounds. 0 = every output frame (default). Slow-moving shaders look identical well below the refresh rate; between ticks the compositor reuses the composited result instead of re-evaluating the shader, so this directly scales the background's GPU cost.
 
+### `animate_paused`
+
+Default: `false`
+
+Freeze animated (`u_time`) shader backgrounds entirely: no animation ticks, the time uniform never advances on its own, and animated-blur refreshes for the background stop. Camera pans/zooms still update it normally. Toggleable via config hot-reload — pause during a game or screenshare, resume after.
+
 ## `[bindings]`
 
 ### `disable_defaults`

@@ -205,6 +205,7 @@ pub(super) struct BackgroundFileConfig {
     pub transparent_shader: Option<bool>,
     pub cache_budget_mb: Option<u32>,
     pub animate_fps: Option<u32>,
+    pub animate_paused: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Default)]

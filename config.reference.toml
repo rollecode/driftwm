@@ -248,6 +248,12 @@
 # # re-evaluating the shader, so this directly scales the background's GPU cost.
 # animate_fps = 0
 
+# # Freeze animated (`u_time`) shader backgrounds entirely: no animation ticks,
+# # the time uniform never advances on its own, and animated-blur refreshes for
+# # the background stop. Camera pans/zooms still update it normally. Toggleable
+# # via config hot-reload — pause during a game or screenshare, resume after.
+# animate_paused = false
+
 [bindings]
 # # Opt out of built-in default bindings by category, for a clean slate.
 # # Normally your [keybindings]/[mouse]/[gestures] entries merge with the

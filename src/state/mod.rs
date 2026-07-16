@@ -1319,9 +1319,10 @@ impl DriftWm {
     /// stamped where the uniforms are actually pushed, in
     /// `update_background_element`. Keyed per output: outputs render on their
     /// own vblanks, and a global stamp would let whichever renders first
-    /// satisfy the interval and starve the rest.
+    /// satisfy the interval and starve the rest. `animate_paused` freezes the
+    /// animation entirely: never due.
     pub fn background_animation_due(&self, output_name: &str) -> bool {
-        if !self.render.background_is_animated {
+        if !self.render.background_is_animated || self.config.background.animate_paused {
             return false;
         }
         let fps = self.config.background.animate_fps;
