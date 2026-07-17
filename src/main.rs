@@ -153,6 +153,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_string_lossy()
         .into_owned();
     tracing::info!("Listening on WAYLAND_DISPLAY={socket_name}");
+    // Read before the set_var below overwrites it: a parent WAYLAND_DISPLAY
+    // marks a nested instance.
+    let nested = std::env::var_os("WAYLAND_DISPLAY").is_some();
     unsafe { std::env::set_var("WAYLAND_DISPLAY", &socket_name) };
     unsafe { std::env::set_var("XDG_SESSION_TYPE", "wayland") };
     unsafe { std::env::set_var("XDG_CURRENT_DESKTOP", "driftwm") };
@@ -176,7 +179,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Export only session-level vars to systemd and D-Bus. Pass them through
     // Command::env() rather than relying on process env — the policy is "don't
     // touch process env at runtime", so the shell-out gets only what we hand it.
-    {
+    // Skip when nested: importing would repoint every user service (shell,
+    // bar) at the nested socket.
+    if !nested {
         let session_vars = [
             ("WAYLAND_DISPLAY", socket_name.as_str()),
             ("XDG_CURRENT_DESKTOP", "driftwm"),
