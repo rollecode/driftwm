@@ -106,6 +106,7 @@ pub struct Config {
     pub snap_corners: bool,
     pub snap_centers: bool,
     pub background: BackgroundConfig,
+    pub hot_corners: HotCornersConfig,
     pub trackpad: TrackpadSettings,
     pub mouse_device: MouseDeviceSettings,
     pub touch: TouchSettings,
@@ -555,6 +556,28 @@ impl Config {
             }
         }
 
+        let hot_corners = {
+            let mut parse_corner = |which: &str, v: &Option<toml::CornerSpec>| {
+                v.iter()
+                    .flat_map(|spec| spec.specs())
+                    .filter_map(|spec| match parse::parse_action(&spec) {
+                        Ok(a) => Some(a),
+                        Err(e) => {
+                            warn_and_collect!("config: invalid hot_corners.{which} '{spec}': {e}");
+                            None
+                        }
+                    })
+                    .collect()
+            };
+            HotCornersConfig {
+                top_left: parse_corner("top_left", &raw.hot_corners.top_left),
+                top_right: parse_corner("top_right", &raw.hot_corners.top_right),
+                bottom_left: parse_corner("bottom_left", &raw.hot_corners.bottom_left),
+                bottom_right: parse_corner("bottom_right", &raw.hot_corners.bottom_right),
+                size: raw.hot_corners.size.unwrap_or(8.0).clamp(1.0, 256.0),
+            }
+        };
+
         let background = BackgroundConfig {
             mirror_tile: raw.background.mirror_tile.unwrap_or(false),
             cache_shader: raw.background.cache_shader.unwrap_or(false),
@@ -866,6 +889,7 @@ impl Config {
             snap_corners: raw.snap.corners.unwrap_or(false),
             snap_centers: raw.snap.centers.unwrap_or(false),
             background,
+            hot_corners,
             decorations,
             effects,
             backend,

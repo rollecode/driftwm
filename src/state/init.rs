@@ -344,6 +344,8 @@ impl DriftWm {
             popup_grab: None,
             held_action: None,
             wheel_notch_accum: 0.0,
+            hot_corner_inside: std::collections::HashMap::new(),
+            hot_corner_step: std::collections::HashMap::new(),
             tap: TapTracker::default(),
             pending_tap_action: None,
             suppressed_keys: HashSet::new(),

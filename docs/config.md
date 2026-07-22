@@ -603,6 +603,25 @@ Default: `false`
 
 Freeze animated (`u_time`) shader backgrounds entirely: no animation ticks, the time uniform never advances on its own, and animated-blur refreshes for the background stop. Camera pans/zooms still update it normally. Toggleable via config hot-reload — pause during a game or screenshare, resume after.
 
+## `[hot_corners]`
+
+Fire an action when the pointer enters a screen corner (top_left, top_right, bottom_left, bottom_right). Detection runs in the compositor, so shell overlays and popups cannot occlude the trigger. Actions use the keybinding action syntax. Fires once per entry; leaving the zone re-arms it. Suppressed while the output is fullscreen so games keep the pointer. Unset corners (the default) do nothing. A corner can also take several actions, alternating between them on each entry and restarting at the first once the corner has been left alone for ten seconds, so a fresh visit is always predictable.
+
+**Example:**
+
+```toml
+top_left = "spawn fuzzel"
+top_right = ["zoom-to-fit", "cycle-windows forward"]
+bottom_left = "spawn dms ipc call notifications open"
+bottom_right = "cycle-windows forward"
+```
+
+### `size`
+
+Default: `8.0`
+
+Trigger zone size in logical pixels from each corner.
+
 ## `[bindings]`
 
 ### `disable_defaults`

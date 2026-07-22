@@ -14,6 +14,7 @@ pub(super) struct ConfigFile {
     pub snap: SnapConfig,
     pub output: OutputConfig,
     pub background: BackgroundFileConfig,
+    pub hot_corners: HotCornersFileConfig,
     pub decorations: DecorationFileConfig,
     pub effects: EffectsFileConfig,
     pub backend: BackendFileConfig,
@@ -189,6 +190,33 @@ pub(super) struct OutputOutlineConfig {
     pub color: Option<String>,
     pub thickness: Option<i32>,
     pub opacity: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub(super) struct HotCornersFileConfig {
+    pub top_left: Option<CornerSpec>,
+    pub top_right: Option<CornerSpec>,
+    pub bottom_left: Option<CornerSpec>,
+    pub bottom_right: Option<CornerSpec>,
+    pub size: Option<f64>,
+}
+
+/// One action, or several that the corner alternates between on each entry.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub(super) enum CornerSpec {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl CornerSpec {
+    pub(super) fn specs(&self) -> Vec<String> {
+        match self {
+            CornerSpec::One(s) => vec![s.clone()],
+            CornerSpec::Many(v) => v.clone(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Default)]

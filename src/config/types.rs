@@ -1045,6 +1045,17 @@ pub enum BackgroundKind {
     Default,
 }
 
+/// Actions fired when the pointer enters a screen corner. Detected in the
+/// compositor so shell overlays and popups cannot occlude the trigger.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct HotCornersConfig {
+    pub top_left: Vec<Action>,
+    pub top_right: Vec<Action>,
+    pub bottom_left: Vec<Action>,
+    pub bottom_right: Vec<Action>,
+    pub size: f64,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BackgroundConfig {
     pub kind: BackgroundKind,

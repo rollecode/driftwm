@@ -525,6 +525,7 @@ impl DriftWm {
         self.update_pointer_constraint(old_focus);
         self.maybe_hover_focus(canvas_pos);
         self.refresh_cursor_edge_pan();
+        self.check_hot_corners(&output, screen_pos);
     }
 
     /// Handle relative pointer motion (libinput mice/trackpads).
@@ -697,7 +698,7 @@ impl DriftWm {
 
         let prev_focused_output = self.focused_output.clone();
         let prev_pointer_over_layer = self.pointer_over_layer;
-        self.focused_output = Some(target_output);
+        self.focused_output = Some(target_output.clone());
 
         let old_focus = pointer.current_focus();
         // Compute the focus once and use it for both motion and relative_motion,
@@ -762,6 +763,7 @@ impl DriftWm {
         self.update_pointer_constraint(old_focus);
         self.maybe_hover_focus(canvas_pos);
         self.refresh_cursor_edge_pan();
+        self.check_hot_corners(&target_output, screen_pos);
     }
 
     /// Cursor edge-pan: recompute the velocity from the cursor's *current*

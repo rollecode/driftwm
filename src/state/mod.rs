@@ -560,6 +560,13 @@ pub struct DriftWm {
     /// here and the bound action fires once per whole notch. Direction
     /// flips discard the residual.
     pub wheel_notch_accum: f64,
+    /// Per-output "pointer is inside corner" flags (TL, TR, BL, BR) so a hot
+    /// corner fires once per entry instead of on every motion event.
+    pub hot_corner_inside: std::collections::HashMap<String, [bool; 4]>,
+    /// Per-output, per-corner: which action fires next and when the corner
+    /// last fired, for corners configured with several alternating actions.
+    pub hot_corner_step:
+        std::collections::HashMap<String, [(usize, Option<std::time::Instant>); 4]>,
 
     pub tap: TapTracker,
     /// Action queued by a completed tap chord, run after the closure forwards
@@ -1421,6 +1428,79 @@ impl DriftWm {
     pub fn is_fullscreen(&self) -> bool {
         self.active_output()
             .is_some_and(|o| self.is_output_fullscreen(&o))
+    }
+
+    /// Fire hot corner actions on entry. Runs in the compositor so shell
+    /// overlays and popups cannot occlude the trigger zones. Skipped while the
+    /// output is fullscreen: a game owning the screen must not lose the
+    /// pointer to a corner action.
+    ///
+    /// A corner configured with several actions alternates between them on
+    /// each entry, restarting at the first once the corner has been left alone
+    /// for `HOT_CORNER_CYCLE_RESET`, so a fresh visit is always predictable.
+    pub fn check_hot_corners(
+        &mut self,
+        output: &Output,
+        screen_pos: Point<f64, smithay::utils::Logical>,
+    ) {
+        const HOT_CORNER_CYCLE_RESET: std::time::Duration = std::time::Duration::from_secs(10);
+
+        let hc = &self.config.hot_corners;
+        if hc.top_left.is_empty()
+            && hc.top_right.is_empty()
+            && hc.bottom_left.is_empty()
+            && hc.bottom_right.is_empty()
+        {
+            return;
+        }
+        if self.is_output_fullscreen(output) {
+            self.hot_corner_inside.remove(&output.name());
+            return;
+        }
+        let size = output_logical_size(output);
+        let (w, h) = (size.w as f64, size.h as f64);
+        let z = hc.size;
+        let inside = [
+            screen_pos.x < z && screen_pos.y < z,
+            screen_pos.x > w - z && screen_pos.y < z,
+            screen_pos.x < z && screen_pos.y > h - z,
+            screen_pos.x > w - z && screen_pos.y > h - z,
+        ];
+        let actions = [
+            &hc.top_left,
+            &hc.top_right,
+            &hc.bottom_left,
+            &hc.bottom_right,
+        ];
+        let name = output.name();
+        let prev = self
+            .hot_corner_inside
+            .get(&name)
+            .copied()
+            .unwrap_or_default();
+        let now = std::time::Instant::now();
+
+        let mut fire = Vec::new();
+        for i in 0..4 {
+            if !inside[i] || prev[i] || actions[i].is_empty() {
+                continue;
+            }
+            let step = self.hot_corner_step.entry(name.clone()).or_default();
+            let stale = step[i].1.is_none_or(|last: std::time::Instant| {
+                now.duration_since(last) > HOT_CORNER_CYCLE_RESET
+            });
+            let idx = if stale {
+                0
+            } else {
+                step[i].0 % actions[i].len()
+            };
+            step[i] = ((idx + 1) % actions[i].len(), Some(now));
+            fire.push(actions[i][idx].clone());
+        }
+        self.hot_corner_inside.insert(name, inside);
+        for action in fire {
+            self.execute_action(&action);
+        }
     }
 
     pub fn is_output_fullscreen(&self, output: &Output) -> bool {
